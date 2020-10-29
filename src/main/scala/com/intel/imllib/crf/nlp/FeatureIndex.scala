@@ -29,10 +29,13 @@ private[nlp] class FeatureIndex extends Serializable {
 
   var maxID = 0
   var alpha: BDV[Double] = _
-  var tokensSize = 0
+  var tokensSize = 0 //tag特此长度
+  var labels: Array[String] = _ //过滤重复后的label集合
+
+  //模板语法
   val unigramTempls = new ArrayBuffer[String]()
   val bigramTempls = new ArrayBuffer[String]()
-  var labels: Array[String] = _
+
   val dic = mutable.HashMap[String, (Int, Int)]()
   val kMaxContextSize = 4
   val BOS = Array("_B-1", "_B-2", "_B-3", "_B-4")
@@ -44,24 +47,24 @@ private[nlp] class FeatureIndex extends Serializable {
   }
   
   def openTagSet(sentence: Sequence) = {
-    val tokenNum = sentence.toArray.map(_.tags.length).distinct
+    val tokenNum = sentence.toArray.map(_.tags.length).distinct //除了label外,tag的特征长度,要求长度是相同的
     require(tokenNum.length == 1,
       "The number of columns should be fixed in each token!")
 
-    labels = sentence.toArray.map(_.label)
+    labels = sentence.toArray.map(_.label) //该句子的所有label集合
     tokensSize = tokenNum.head
-    (labels, tokensSize)
+    (labels, tokensSize) //该句子的所有label集合 以及 tag特此长度
   }
 
   /**
    * Build feature index
    */
   def buildFeatures(tagger: Tagger): Tagger = {
-    List(unigramTempls, bigramTempls).foreach{ templs =>
-      tagger.x.foreach { token =>
+    List(unigramTempls, bigramTempls).foreach{ templs => //循环每一种模板集合
+      tagger.x.foreach { token => //循环每一个token
         if (tagger.x.head != token || templs.head.head.equals('U')) {
           tagger.featureCacheIndex.append(tagger.featureCache.length)
-          templs.foreach { templ =>
+          templs.foreach { templ => //循环每一个模板
             val os = applyRule(templ, tagger.x.indexOf(token), tagger)
             val id = dic.getOrElse(os, (-1, 0))._1
             if (id != -1) tagger.featureCache.append(id)
@@ -92,6 +95,7 @@ private[nlp] class FeatureIndex extends Serializable {
     dicLocal
   }
 
+  //模板 U13:%x[-1,0]/%x[0,0] 或者 U12:%x[6,0]
   def applyRule(src: String, idx: Int, tagger: Tagger): String = {
     val templ = src.split(":")
     if (templ.size == 2) {
@@ -104,6 +108,7 @@ private[nlp] class FeatureIndex extends Serializable {
   }
 
   def getIndex(src: String, pos: Int, tagger: Tagger): String = {
+    //因为模板是U12:%x[6,0],此时src是[6,0],因此要去除[]中括号
     val coor = src.drop(1).dropRight(1).split(",")
     require(coor.size == 2, "Incompatible formats in Template")
     val row = coor(0).toInt
@@ -126,6 +131,7 @@ private[nlp] class FeatureIndex extends Serializable {
     * Read one template file
     *
     * @param lines the template file
+    * 读取模板文件,向集合中添加模板信息
     */
   def openTemplate(lines: Array[String]): Unit = {
     var i: Int = 0
@@ -211,13 +217,14 @@ private[nlp] class FeatureIndex extends Serializable {
     this
   }
 
+  //将训练和测试集合RDD进行处理
   def openTagSetDist(trains: RDD[Sequence]) {
-    val features: RDD[(Array[String], Int)] = trains.map(openTagSet)
-    val tokensSizeCollect = features.map(_._2).distinct().collect()
+    val features: RDD[(Array[String], Int)] = trains.map(openTagSet) //该句子的所有label集合 以及 tag特此长度
+    val tokensSizeCollect = features.map(_._2).distinct().collect() //要求tag特此长度是唯一的
     require(tokensSizeCollect.length == 1,
       "The number of columns should be fixed in each token!")
     tokensSize = tokensSizeCollect.head
-    labels = features.map(_._1.distinct).flatMap(l => l).distinct().collect()
+    labels = features.map(_._1.distinct).flatMap(l => l).distinct().collect() //过滤重复后的label集合,数据量没多少,因此可以缓存到本地
   }
 
   def buildDictionaryDist(taggers: RDD[Tagger],  bcFeatureIdxI: Broadcast[FeatureIndex], freq: Int) {
@@ -236,6 +243,7 @@ private[nlp] class FeatureIndex extends Serializable {
         (feature, (featureID.toInt * bcFeatureIdxI.value.labels.size * bcFeatureIdxI.value.labels.size + bcOffSet.value, frequency))
       }
 
+    //TODO local模式,似乎会消耗性能,有待优化
     val dictionaryGram = dictionaryUni.union(dictionaryBi).collect()
 
     dictionaryGram.foreach{case(k, v) => dic.update(k, v)}

@@ -30,6 +30,7 @@ private[nlp] case object TestMode extends Mode
 
 private[nlp] case class QueueElement(node : Node, fx : Double, gx : Double, next : QueueElement)
 
+//代表一个句子,里面持有token,主要用于该句子的模板处理等操作
 private[nlp] class Tagger (
     ySize: Int,
     mode: Mode) extends Serializable {
@@ -38,9 +39,9 @@ private[nlp] class Tagger (
   var Z = 0.0
   var obj = 0.0
   var costFactor = 1.0
-  val x = new ArrayBuffer[Array[String]]()
+  val x = new ArrayBuffer[Array[String]]() //该句子每一个分词信息
   val nodes  = new ArrayBuffer[Node]()
-  val answer = new ArrayBuffer[Int]()
+  val answer = new ArrayBuffer[Int]() //label的下标,该句子中每一个分词对应的label
   val result = new ArrayBuffer[Int]()
   val featureCache = new ArrayBuffer[Int]()
   val featureCacheIndex = new ArrayBuffer[Int]()

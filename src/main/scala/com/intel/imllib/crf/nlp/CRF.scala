@@ -75,6 +75,7 @@ class CRF private (
     val taggers = trains
       .map(new Tagger(bcFeatureIdxI.value.labels.size, LearnMode).read(_, bcFeatureIdxI.value))
 
+    //TODO 似乎会调用local方式,耗费性能,有待优化
     featureIdx.buildDictionaryDist(taggers, bcFeatureIdxI, freq)
 
     val bcFeatureIdxII = trains.context.broadcast(featureIdx)

@@ -24,6 +24,7 @@ import scala.collection.mutable.ArrayBuffer
   *
   * @param label The last column for this token.
   * @param tags List of tags for this token, expect for the last label.
+  * 标签+数据组成,比如label(M) + tags(poi名称),但token表示一个句子的一个词
   */
 class Token(
     val label: String,
@@ -45,6 +46,7 @@ class Token(
     strRes.toString
   }
 
+  //格式: label + |--| + tag集合
   override def toString: String = {
     s"$label|--|${tags.mkString("|-|")}"
   }
@@ -58,7 +60,8 @@ object Token {
   /**
     * Parses a string resulted from `LabeledToken#toString` into
     * an [[com.intel.imllib.crf.nlp.Token]].
-    *
+    * 如何将一个字符串转换成token
+    * 比如B|--|幸
     */
   def deSerializer(s: String): Token = {
     val parts = s.split("""\|--\|""")
@@ -156,6 +159,8 @@ case class Sequence (sequence: Array[Token]) extends Serializable {
 }
 
 object Sequence {
+  //B|--|幸	M|--|福	M|--|西	E|--|饼	O|--|蛋	O|--|糕	O|--|（	O|--|广	O|--|州	O|--|荔	O|--|湾	O|--|店	O|--|）
+  //如何将一个句子字符串,转换成句子
   def deSerializer(s: String): Sequence = {
     val tokens = s.split("\t")
     tokens.head.substring(0, 5) match {

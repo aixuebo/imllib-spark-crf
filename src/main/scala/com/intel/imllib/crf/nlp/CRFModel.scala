@@ -18,7 +18,10 @@
 package com.intel.imllib.crf.nlp
 
 import java.io._
-import java.nio.file.{StandardOpenOption, Paths, Files}
+import java.nio.file.{Files, Paths, StandardOpenOption}
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FSDataInputStream, FSDataOutputStream}
 
 import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.rdd.RDD
@@ -40,6 +43,7 @@ case class CRFModel (
 
   private var nBest =  0
   private var costFactor = 1.0
+  private var featureIndex : Option[FeatureIndex] = None
 
   def setNBest(nBest: Int): CRFModel = {
     this.nBest = nBest
@@ -53,6 +57,11 @@ case class CRFModel (
 
   def setcostFact(cf: Double) = {
     this.costFactor = cf
+    this
+  }
+
+  def setFeatureIndex(): CRFModel = {
+    this.featureIndex = Option(new FeatureIndex().readModel(this))
     this
   }
 
@@ -91,6 +100,10 @@ case class CRFModel (
     val deFeatureIdx = new FeatureIndex()
     deFeatureIdx.readModel(this)
     tests.map(testCRF(_, deFeatureIdx))
+  }
+
+  def predict(test: Sequence): Sequence = {
+    testCRF(test,this.featureIndex.get)
   }
   /**
     * Internal method to test the CRF model
@@ -194,8 +207,29 @@ object CRFModel {
     }), alpha.toArray.map(_.toDouble))
   }
 
+  def loadArray(input : FSDataInputStream): CRFModel = {
+    val buf = scala.collection.mutable.ArrayBuffer.empty[String]
+    val size = input.readInt()
+    println("read==>"+size)
+    try{
+      for(i <- (0 until size)){
+        buf += input.readUTF()
+      }
+    } catch{
+      case e:Exception => e.printStackTrace()
+    }
+    input.close()
+    loadArray(buf.toArray)
+  }
+
   def save(model: CRFModel): String = {
     model.toString
+  }
+
+  def save(model: CRFModel,output : FSDataOutputStream) = {
+    output.writeBytes(model.toString)
+    output.flush()
+    output.hsync()
   }
 
   def saveBinaryFile(model: CRFModel, path: String) = {
@@ -218,4 +252,15 @@ object CRFModel {
   def saveArray(model: CRFModel): Array[String] = {
     model.toArrayString
   }
+
+  def saveArray(model: CRFModel,output : FSDataOutputStream)= {
+    val arr :  Array[String] = model.toArrayString
+    output.writeInt(arr.length)
+    arr.foreach(output.writeUTF(_))
+    println("write==>"+arr.length)
+    output.flush()
+    output.hflush()
+    output.close()
+  }
+
 }
